@@ -7,4 +7,5 @@
   <Project Path="StudyPlanner.Core/StudyPlanner.Core.csproj" Id="352aafa2-8844-4408-8475-37b277252f9a" />
   <Project Path="StudyPlanner.Data/StudyPlanner.Data.csproj" Id="478f50c2-8c4e-45b1-8760-cbbaad189b6b" />
   <Project Path="StudyPlanner.Presentation/StudyPlanner.Presentation.csproj" Id="7922615b-a262-4988-97df-9dc8ab6296d0" />
+  <Project Path="StudyPlanner.Tests/StudyPlanner.Tests.csproj" Id="50ae594d-1534-4d9b-8de8-5818fffab1a6" />
 </Solution>

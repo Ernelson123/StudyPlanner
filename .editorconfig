@@ -31,3 +31,4 @@ dotnet_diagnostic.CA1812.severity = none
 dotnet_diagnostic.CA1852.severity = none
 # WPF não usa ConfigureAwait na UI thread
 dotnet_diagnostic.CA2007.severity = none
+dotnet_diagnostic.CA1707.severity = none
