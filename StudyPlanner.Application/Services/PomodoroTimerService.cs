@@ -1,12 +1,110 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using StudyPlanner.Core.Enums;
+using StudyPlanner.Core.Events;
 
-namespace StudyPlanner.Application.Services
+namespace StudyPlanner.Application.Services;
+
+public sealed class PomodoroTimerService : ITimerService, IDisposable
 {
-    public class PomodoroTimerService
+    private readonly ILogger<PomodoroTimerService> _logger;
+    private readonly PeriodicTimer _timer = new(TimeSpan.FromSeconds(1));
+
+    private readonly TimeSpan _workDuration = TimeSpan.FromMinutes(25);
+    private readonly TimeSpan _shortBreak = TimeSpan.FromMinutes(5);
+    private readonly TimeSpan _longBreak = TimeSpan.FromMinutes(15);
+
+    private int _completedPomodoros;
+    private int _secondsElapsed;
+    private CancellationTokenSource? _cts;
+    private TimeSpan _currentTargetDuration;
+
+    public event EventHandler<TimerTickEventArgs>? Tick;
+    public event EventHandler<StateChangedEventArgs>? StateChanged;
+    public PomodoroState CurrentState { get; private set; } = PomodoroState.Idle;
+
+    public TimeSpan RemainingTime => _currentTargetDuration - TimeSpan.FromSeconds(_secondsElapsed);
+
+    public PomodoroTimerService(ILogger<PomodoroTimerService> logger)
     {
+        _logger = logger;
+    }
+
+    public async Task StartAsync(CancellationToken cancellationToken = default)
+    {
+        if (CurrentState != PomodoroState.Idle)
+            throw new InvalidOperationException("Timer is already running.");
+
+        _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        _logger.LogInformation("Starting Pomodoro cycle");
+        await SetStateAsync(PomodoroState.Work);
+
+        try
+        {
+            while (await _timer.WaitForNextTickAsync(_cts.Token))
+            {
+                _secondsElapsed++;
+                Tick?.Invoke(this, new TimerTickEventArgs(RemainingTime));
+
+                if (_secondsElapsed >= _currentTargetDuration.TotalSeconds)
+                {
+                    await HandlePhaseCompletion();
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected on Stop
+        }
+        finally
+        {
+            CurrentState = PomodoroState.Idle;
+            StateChanged?.Invoke(this, new StateChangedEventArgs(PomodoroState.Idle));
+        }
+    }
+
+    public async Task StopAsync()
+    {
+        if (_cts != null) await _cts.CancelAsync();
+    }
+
+    private async Task HandlePhaseCompletion()
+    {
+        _logger.LogInformation("Phase completed: {State}", CurrentState);
+
+        if (CurrentState == PomodoroState.Work)
+        {
+            _completedPomodoros++;
+            if (_completedPomodoros % 4 == 0)
+                await SetStateAsync(PomodoroState.LongBreak);
+            else
+                await SetStateAsync(PomodoroState.ShortBreak);
+        }
+        else
+        {
+            await SetStateAsync(PomodoroState.Work);
+        }
+
+        _secondsElapsed = 0;
+    }
+
+    private async Task SetStateAsync(PomodoroState newState)
+    {
+        CurrentState = newState;
+        _currentTargetDuration = newState switch
+        {
+            PomodoroState.Work => _workDuration,
+            PomodoroState.ShortBreak => _shortBreak,
+            PomodoroState.LongBreak => _longBreak,
+            _ => TimeSpan.Zero
+        };
+        StateChanged?.Invoke(this, new StateChangedEventArgs(newState));
+        await Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        _cts?.Dispose();
+        _timer.Dispose();
     }
 }

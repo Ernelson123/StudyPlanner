@@ -24,6 +24,8 @@ public partial class App : System.Windows.Application
                     services.AddSingleton<INotificationService, DesktopNotificationService>();
                     services.AddScoped<IPlanningService, PlanningService>();
                     services.AddScoped<IStatisticsService, StatisticsService>();
+                    services.AddSingleton<ITimerService, PomodoroTimerService>();
+                    services.AddSingleton<ITimeAllocator, TimeAllocator>();
                     services.AddDbContext<StudyPlannerDbContext>(options =>
                         options.UseSqlite("Data Source=studyplanner.db"));
                     services.AddTransient<MainWindow>();

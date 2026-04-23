@@ -18,6 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\StudyPlanner.Application\StudyPlanner.Application.csproj" />
     <ProjectReference Include="..\StudyPlanner.Core\StudyPlanner.Core.csproj" />
   </ItemGroup>
 
