@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using StudyPlanner.Application.Repositories;
 using StudyPlanner.Application.Services;
 using StudyPlanner.Core.Services;
 using StudyPlanner.Data;
+using StudyPlanner.Data.Repositories;
 using StudyPlanner.Presentation.Services;
 using System.Windows;
 
@@ -29,6 +31,10 @@ public partial class App : System.Windows.Application
                     services.AddDbContext<StudyPlannerDbContext>(options =>
                         options.UseSqlite("Data Source=studyplanner.db"));
                     services.AddTransient<MainWindow>();
+                    // 1. Database Context (Singleton is safe for SQLite in single-user desktop apps)
+                    services.AddTransient<StudyPlannerDbContext>();
+                    // 2. Repositories
+                    services.AddTransient<ISubjectRepository, SubjectRepository>();
                 })
                 .Build();
 
