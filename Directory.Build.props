@@ -1,4 +1,4 @@
-﻿<Project>
+<Project>
 	<PropertyGroup>
 		<TargetFramework>net8.0</TargetFramework>
 		<LangVersion>12</LangVersion>
@@ -7,7 +7,7 @@
 		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 		<AnalysisMode>All</AnalysisMode>
 		<EnableNETAnalyzers>true</EnableNETAnalyzers>
-		<InvariantGlobalization>true</InvariantGlobalization>
+		<InvariantGlobalization>false</InvariantGlobalization>
 		<TrimMode>partial</TrimMode>
 	</PropertyGroup>
 </Project>

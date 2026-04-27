@@ -1,24 +1,25 @@
-﻿using System.Text;
+using StudyPlanner.Presentation.ViewModels;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 
-namespace StudyPlanner.Presentation
+namespace StudyPlanner.Presentation;
+
+public partial class MainWindow : Window
 {
-    /// <summary>
-    /// Interaction logic for MainWindow.xaml
-    /// </summary>
-    public partial class MainWindow : Window
+    // Parameterless constructor for XAML designer
+    public MainWindow() : this(null) { }
+
+    // Constructor for DI injection
+    public MainWindow(MainViewModel? viewModel)
     {
-        public MainWindow()
+        InitializeComponent();
+
+        System.Diagnostics.Debug.WriteLine($"Current Culture: {System.Globalization.CultureInfo.CurrentCulture.Name}");
+        System.Diagnostics.Debug.WriteLine($"Current UI Culture: {System.Globalization.CultureInfo.CurrentUICulture.Name}");
+
+
+        if (viewModel is not null)
         {
-            InitializeComponent();
+            DataContext = viewModel;
         }
     }
 }
