@@ -5,8 +5,8 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:StudyPlanner.Presentation.ViewModels"
         mc:Ignorable="d"
-        Title="Study Planner" Height="450" Width="800"
-         d:DataContext="{d:DesignInstance Type=vm:MainViewModel, IsDesignTimeCreatable=False}">
+        Title="Study Planner" Height="550" Width="900"
+        d:DataContext="{d:DesignInstance Type=vm:MainViewModel, IsDesignTimeCreatable=False}">
 
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -14,22 +14,184 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="2*"/>
+            <ColumnDefinition Width="1*"/>
+        </Grid.ColumnDefinitions>
 
-        <TextBlock Text="Study Planner" FontSize="24" FontWeight="Bold" Margin="0,0,0,15"/>
+        <!-- Header -->
+        <TextBlock Text="Study Planner" FontSize="28" FontWeight="Bold" 
+                   Grid.ColumnSpan="2" Margin="0,0,0,20"/>
 
+        <!-- Timer Panel (Right Side) -->
+        <Border Grid.Column="1" Background="#F8F9FA" CornerRadius="8" 
+                Padding="20" Margin="0,0,0,20">
+            <StackPanel HorizontalAlignment="Center">
+                <TextBlock Text="Pomodoro Timer" FontSize="18" FontWeight="SemiBold" 
+                           HorizontalAlignment="Center" Margin="0,0,0,15"
+                           Foreground="#2D3748"/>
+
+                <!-- Timer Display -->
+                <TextBlock Text="{Binding TimerDisplay}" 
+                           FontSize="56" FontWeight="Bold" 
+                           Foreground="#2D3748" 
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,10"/>
+
+                <!-- State Display -->
+                <TextBlock Text="{Binding CurrentState}" 
+                           FontSize="14" 
+                           Foreground="#718096" 
+                           HorizontalAlignment="Center" 
+                           Margin="0,0,0,20"/>
+
+                <!-- Start/Stop Buttons -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <Button Content="▶ Start" 
+                            Padding="20,10" 
+                            Margin="0,0,10,0"
+                            FontSize="14"
+                            Command="{Binding StartTimerCommand}"
+                            Background="#38A169" 
+                            Foreground="White" 
+                            BorderThickness="0"
+                            Cursor="Hand">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" 
+                                        CornerRadius="6" 
+                                        Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                            </ControlTemplate>
+                        </Button.Template>
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#2F855A"/>
+                                    </Trigger>
+                                    <Trigger Property="IsEnabled" Value="False">
+                                        <Setter Property="Background" Value="#A0AEC0"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+
+                    <Button Content="⏹ Stop" 
+                            Padding="20,10"
+                            FontSize="14"
+                            Command="{Binding StopTimerCommand}"
+                            Background="#E53E3E" 
+                            Foreground="White" 
+                            BorderThickness="0"
+                            Cursor="Hand">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" 
+                                        CornerRadius="6" 
+                                        Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                            </ControlTemplate>
+                        </Button.Template>
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#C53030"/>
+                                    </Trigger>
+                                    <Trigger Property="IsEnabled" Value="False">
+                                        <Setter Property="Background" Value="#A0AEC0"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Subject Input Section -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,20">
-            <TextBox Width="200" Margin="0,0,10,0"
-                     Text="{Binding NewSubjectName, UpdateSourceTrigger=PropertyChanged}"
-                     ToolTip="Subject Name"/>
-            <TextBox Width="60" Margin="0,0,10,0"
-                     Text="{Binding NewPriority, UpdateSourceTrigger=PropertyChanged}"
-                     ToolTip="Priority (1-10)"/>
-            <Button Content="Add Subject" Padding="10,5"
-                    Command="{Binding AddSubjectCommand}"/>
+            <!-- Subject Name TextBox -->
+            <Border BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Width="300" Margin="0,0,10,0">
+                <TextBox Padding="10,8"
+                         FontSize="14"
+                         Text="{Binding NewSubjectName, UpdateSourceTrigger=PropertyChanged}"
+                         ToolTip="Enter subject name"
+                         BorderThickness="0"
+                         Background="Transparent"/>
+            </Border>
+
+            <!-- Priority TextBox -->
+            <Border BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Width="100" Margin="0,0,10,0">
+                <TextBox Padding="10,8"
+                         FontSize="14"
+                         Text="{Binding NewPriority, UpdateSourceTrigger=PropertyChanged}"
+                         ToolTip="Priority (1-10)"
+                         BorderThickness="0"
+                         Background="Transparent"/>
+            </Border>
+
+            <!-- Add Subject Button -->
+            <Button Content="Add Subject" 
+                    Padding="15,8"
+                    FontSize="14"
+                    Command="{Binding AddSubjectCommand}"
+                    Background="#4299E1" 
+                    Foreground="White"
+                    BorderThickness="0"
+                    Cursor="Hand">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="6" 
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Button.Template>
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#3182CE"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Background" Value="#A0AEC0"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
         </StackPanel>
 
-        <ListBox Grid.Row="2" ItemsSource="{Binding Subjects}"
-                 DisplayMemberPath="Name"
-                 SelectionMode="Single"/>
+        <!-- Subjects List (Left Side) -->
+        <Border Grid.Row="2" Grid.ColumnSpan="2" 
+                BorderBrush="#E2E8F0" 
+                BorderThickness="1"
+                CornerRadius="6"
+                Background="White">
+            <ListBox ItemsSource="{Binding Subjects}"
+                     DisplayMemberPath="Name"
+                     SelectionMode="Single"
+                     BorderThickness="0"
+                     Padding="10"
+                     Background="Transparent">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Padding" Value="10,8"/>
+                        <Setter Property="Margin" Value="0,2"/>
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#F7FAFC"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+            </ListBox>
+        </Border>
     </Grid>
 </Window>

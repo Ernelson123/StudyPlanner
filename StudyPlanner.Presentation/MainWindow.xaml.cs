@@ -8,18 +8,23 @@ public partial class MainWindow : Window
     // Parameterless constructor for XAML designer
     public MainWindow() : this(null) { }
 
-    // Constructor for DI injection
+    // Constructor for Dependency Injection at runtime
     public MainWindow(MainViewModel? viewModel)
     {
         InitializeComponent();
-
-        System.Diagnostics.Debug.WriteLine($"Current Culture: {System.Globalization.CultureInfo.CurrentCulture.Name}");
-        System.Diagnostics.Debug.WriteLine($"Current UI Culture: {System.Globalization.CultureInfo.CurrentUICulture.Name}");
-
-
         if (viewModel is not null)
         {
             DataContext = viewModel;
         }
+    }
+
+    // Clean up resources when window closes
+    protected override void OnClosed(EventArgs e)
+    {
+        if (DataContext is IDisposable vm)
+        {
+            vm.Dispose();
+        }
+        base.OnClosed(e);
     }
 }
