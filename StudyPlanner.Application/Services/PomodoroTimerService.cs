@@ -20,6 +20,8 @@ public sealed class PomodoroTimerService : ITimerService, IDisposable
 
     public event EventHandler<TimerTickEventArgs>? Tick;
     public event EventHandler<StateChangedEventArgs>? StateChanged;
+    public event EventHandler<WorkPhaseCompletedEventArgs>? WorkPhaseCompleted;
+
     public PomodoroState CurrentState { get; private set; } = PomodoroState.Idle;
 
     public TimeSpan RemainingTime => _currentTargetDuration - TimeSpan.FromSeconds(_secondsElapsed);
@@ -74,7 +76,13 @@ public sealed class PomodoroTimerService : ITimerService, IDisposable
 
         if (CurrentState == PomodoroState.Work)
         {
+            // RAISE EVENT: Notify subscribers that a work phase just finished
+            // This triggers automatic session recording in the ViewModel
+            // The event passes the work duration (25 minutes) so we know how long was studied
+            WorkPhaseCompleted?.Invoke(this, new WorkPhaseCompletedEventArgs(_workDuration));
+
             _completedPomodoros++;
+            // After 4 pomodoros, take a long break (15 min)
             if (_completedPomodoros % 4 == 0)
                 await SetStateAsync(PomodoroState.LongBreak);
             else
@@ -82,6 +90,7 @@ public sealed class PomodoroTimerService : ITimerService, IDisposable
         }
         else
         {
+            // Break is over, start a new work session
             await SetStateAsync(PomodoroState.Work);
         }
 

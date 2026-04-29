@@ -50,6 +50,10 @@ namespace StudyPlanner.Presentation
                         services.AddTransient<ISubjectRepository, SubjectRepository>();
                         services.AddTransient<MainWindow>();
                         services.AddTransient<MainViewModel>();
+                        services.AddTransient<IStudySessionService, StudyPlanner.Data.Services.StudySessionService>();
+                        // Study Session Service (Data layer implementation)
+                        services.AddTransient<IStudySessionService, StudyPlanner.Data.Services.StudySessionService>();
+
                     })
                     .Build();
 

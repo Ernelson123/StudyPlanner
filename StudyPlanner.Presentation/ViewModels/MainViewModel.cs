@@ -1,49 +1,90 @@
+using System;
+using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using LiveChartsCore;
+using LiveChartsCore.SkiaSharpView;
+using LiveChartsCore.SkiaSharpView.WPF;
 using Microsoft.Extensions.Logging;
 using StudyPlanner.Application.Repositories;
 using StudyPlanner.Application.Services;
 using StudyPlanner.Core.Entities;
 using StudyPlanner.Core.Enums;
 using StudyPlanner.Core.Events;
-using System.Collections.ObjectModel;
-using System.Globalization;
-using System.Windows.Threading;
 
 namespace StudyPlanner.Presentation.ViewModels
 {
 
     /// <summary>
-    /// Main ViewModel for the application window.
-    /// Follows MVVM pattern: bridges UI (View) with business logic (Model/Service).
-    /// Implements IDisposable to clean up timer event subscriptions.
+    /// Main ViewModel for the Study Planner application.
+    /// Acts as the bridge between the UI (View) and business logic (Services/Repositories).
+    /// Follows MVVM pattern with data binding and commands.
     /// </summary>
     public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         // ========== DEPENDENCIES (Injected via Constructor) ==========
-        private readonly ISubjectRepository _subjectRepository;  // Database access for subjects
-        private readonly ITimerService _timerService;            // Pomodoro timer logic
-        private readonly ILogger<MainViewModel> _logger;         // Logging for debugging/errors
-        private readonly Dispatcher _dispatcher;                 // Marshals UI updates from background threads
-        private bool _disposed;                                  // Prevents double-disposal of resources
 
         /// <summary>
-        /// Constructor - Called by Dependency Injection container when window opens.
+        /// Repository for accessing Subject data from SQLite database.
+        /// Provides CRUD operations for study subjects.
+        /// </summary>
+        private readonly ISubjectRepository _subjectRepository;
+
+        /// <summary>
+        /// Service that manages the Pomodoro timer (25 min work, 5 min break).
+        /// Runs on a background thread and raises events for UI updates.
+        /// </summary>
+        private readonly ITimerService _timerService;
+
+        /// <summary>
+        /// Service for recording and retrieving study sessions.
+        /// Automatically logs sessions when Pomodoro work phases complete.
+        /// </summary>
+        private readonly IStudySessionService _studySessionService;
+
+        /// <summary>
+        /// Logger for debugging and error tracking.
+        /// Writes to console during development.
+        /// </summary>
+        private readonly ILogger<MainViewModel> _logger;
+
+        /// <summary>
+        /// WPF Dispatcher for marshaling background thread updates to UI thread.
+        /// Required because timer events fire on a background thread, but UI can only be updated from UI thread.
+        /// </summary>
+        private readonly Dispatcher _dispatcher;
+
+        /// <summary>
+        /// Flag to prevent event handlers from running after ViewModel is disposed.
+        /// Prevents memory leaks and null reference exceptions.
+        /// </summary>
+        private bool _disposed;
+
+        /// <summary>
+        /// Constructor - Called by Dependency Injection when MainWindow opens.
         /// All dependencies are automatically injected from App.xaml.cs ConfigureServices().
         /// </summary>
         public MainViewModel(
             ISubjectRepository subjectRepository,
             ITimerService timerService,
+            IStudySessionService studySessionService,
             ILogger<MainViewModel> logger)
         {
             // Store dependencies for later use
             _subjectRepository = subjectRepository;
             _timerService = timerService;
+            _studySessionService = studySessionService;
             _logger = logger;
 
             // Get UI thread dispatcher for thread-safe updates
             // Fallback if Application.Current is null (e.g., designer mode)
-            _dispatcher = System.Windows.Application.Current?.Dispatcher ?? Dispatcher.FromThread(System.Threading.Thread.CurrentThread);
+            _dispatcher = System.Windows.Application.Current?.Dispatcher ??
+                          Dispatcher.FromThread(System.Threading.Thread.CurrentThread);
 
             // ========== INITIALIZE COMMANDS ==========
             // Commands are like "methods" that buttons can bind to in XAML
@@ -52,12 +93,14 @@ namespace StudyPlanner.Presentation.ViewModels
             AddSubjectCommand = new AsyncRelayCommand(AddSubjectAsync, CanAddSubject);
             StartTimerCommand = new AsyncRelayCommand(StartTimerAsync, () => !IsTimerRunning);
             StopTimerCommand = new AsyncRelayCommand(StopTimerAsync, () => IsTimerRunning);
+            GenerateReportCommand = new AsyncRelayCommand(GenerateReportAsync);
 
             // ========== SUBSCRIBE TO TIMER EVENTS ==========
             // Timer runs on background thread, raises events when it ticks or changes state
             // We handle these events to update UI properties (which trigger data binding)
             _timerService.Tick += OnTimerTick;
             _timerService.StateChanged += OnStateChanged;
+            _timerService.WorkPhaseCompleted += OnWorkPhaseCompleted;
 
             // ========== INITIALIZE UI STATE ==========
             // Set initial timer display (e.g., "25:00")
@@ -66,25 +109,36 @@ namespace StudyPlanner.Presentation.ViewModels
             CurrentState = _timerService.CurrentState.ToString();
 
             // ========== LOAD DATA ON STARTUP ==========
-            // Fire-and-forget: Load subjects from database when ViewModel is created
+            // Fire-and-forget: Load subjects and chart data when ViewModel is created
             // The underscore (_) prefix means "we're intentionally ignoring the Task result"
             _ = SafeLoadSubjectsAsync();
+            _ = SafeLoadWeeklyChartDataAsync();
         }
 
         // ========== SUBJECTS SECTION (Data Management) ==========
         #region Subjects
 
-        // ObservableCollection automatically notifies UI when items are added/removed
-        // This makes the ListBox update in real-time without manual refresh
+        /// <summary>
+        /// ObservableCollection automatically notifies UI when items are added/removed.
+        /// This makes the ListBox update in real-time without manual refresh.
+        /// Bound to ListBox in XAML via ItemsSource="{Binding Subjects}".
+        /// </summary>
         [ObservableProperty] private ObservableCollection<Subject> _subjects = new();
 
-        // Bound to TextBox in XAML - user types subject name here
+        /// <summary>
+        /// Bound to TextBox in XAML - user types subject name here.
+        /// UpdateSourceTrigger=PropertyChanged means it updates on every keystroke.
+        /// </summary>
         [ObservableProperty] private string _newSubjectName = string.Empty;
 
-        // Bound to TextBox in XAML - user enters priority (1-10)
+        /// <summary>
+        /// Bound to TextBox in XAML - user enters priority (1-10).
+        /// </summary>
         [ObservableProperty] private int _newPriority = 1;
 
-        // Public commands that XAML buttons bind to
+        /// <summary>
+        /// Public commands that XAML buttons bind to.
+        /// </summary>
         public IAsyncRelayCommand LoadSubjectsCommand { get; }
         public IAsyncRelayCommand AddSubjectCommand { get; }
 
@@ -142,7 +196,6 @@ namespace StudyPlanner.Presentation.ViewModels
             {
                 // Log error (visible in Output window during debug)
                 _logger.LogError(ex, "Failed to add subject");
-                // In production, you might show a MessageBox here
             }
         }
 
@@ -171,16 +224,27 @@ namespace StudyPlanner.Presentation.ViewModels
         // ========== TIMER SECTION (Pomodoro Functionality) ==========
         #region Timer
 
-        // Display text for timer (e.g., "25:00", "04:32")
+        /// <summary>
+        /// Display text for timer (e.g., "25:00", "04:32").
+        /// Bound to TextBlock in XAML.
+        /// </summary>
         [ObservableProperty] private string _timerDisplay = "25:00";
 
-        // Current timer state (e.g., "Idle", "Work", "ShortBreak", "LongBreak")
+        /// <summary>
+        /// Current timer state (e.g., "Idle", "Work", "ShortBreak", "LongBreak").
+        /// Bound to TextBlock in XAML.
+        /// </summary>
         [ObservableProperty] private string _currentState = "Idle";
 
-        // Controls button enable/disable state
+        /// <summary>
+        /// Controls button enable/disable state.
+        /// When true, Start button is disabled and Stop button is enabled.
+        /// </summary>
         [ObservableProperty] private bool _isTimerRunning;
 
-        // Public commands for Start/Stop buttons
+        /// <summary>
+        /// Public commands for Start/Stop buttons.
+        /// </summary>
         public IAsyncRelayCommand StartTimerCommand { get; }
         public IAsyncRelayCommand StopTimerCommand { get; }
 
@@ -218,6 +282,33 @@ namespace StudyPlanner.Presentation.ViewModels
         }
 
         /// <summary>
+        /// Called by ITimerService when a 25-minute work phase completes.
+        /// Automatically records a study session and updates the chart.
+        /// </summary>
+        private void OnWorkPhaseCompleted(object? sender, WorkPhaseCompletedEventArgs e)
+        {
+            if (_disposed) return;
+
+            // Only record session if we have at least one subject
+            // In a real app, you'd track which subject is currently selected
+            if (Subjects.Any())
+            {
+                // Use the first subject (you could add a SelectedSubject property instead)
+                var firstSubject = Subjects.First();
+
+                // Record the completed session in the database
+                // This happens automatically - user doesn't need to do anything
+                _ = _studySessionService.RecordSessionAsync(
+                    firstSubject.Id,
+                    DateTime.UtcNow,
+                    e.Duration);
+
+                // Refresh the weekly chart to show the new session
+                _ = SafeLoadWeeklyChartDataAsync();
+            }
+        }
+
+        /// <summary>
         /// Formats TimeSpan as "mm:ss" string for display.
         /// Uses InvariantCulture to ensure consistent formatting across locales.
         /// </summary>
@@ -252,7 +343,120 @@ namespace StudyPlanner.Presentation.ViewModels
         }
         #endregion
 
-        // ========== CLEANUP SECTION (Memory Leak Prevention) ==========
+        // ========== CHART SECTION (LiveCharts2) ==========
+        #region Charts
+
+        /// <summary>
+        /// LiveCharts2 data series for the weekly study hours chart.
+        /// Bound to CartesianChart in XAML.
+        /// When this property changes, the chart automatically redraws.
+        /// </summary>
+        [ObservableProperty] private ISeries[] _weeklyStudySeries = Array.Empty<ISeries>();
+
+        /// <summary>
+        /// Wrapper for LoadWeeklyChartDataAsync that catches errors.
+        /// Prevents app crash if database query fails.
+        /// </summary>
+        private async Task SafeLoadWeeklyChartDataAsync()
+        {
+            try { await LoadWeeklyChartDataAsync(); }
+#pragma warning disable CA1031 // Generic catch acceptable for chart loading
+            catch (Exception ex) { _logger.LogError(ex, "Failed to load weekly chart data"); }
+#pragma warning restore CA1031
+        }
+
+        /// <summary>
+        /// Loads study sessions from the past week and calculates total hours per day.
+        /// Updates the LiveCharts2 chart with the results.
+        /// </summary>
+        private async Task LoadWeeklyChartDataAsync()
+        {
+            // Calculate the start and end of the current week (Monday to Sunday)
+            var today = DateTime.UtcNow.Date;
+            var weekStart = today.AddDays(-(int)today.DayOfWeek);  // Monday
+            var weekEnd = weekStart.AddDays(6);  // Sunday
+
+            // Fetch all sessions from this week
+            var sessions = await _studySessionService.GetWeeklySessionsAsync(weekStart, weekEnd);
+
+            // Group sessions by day of week and sum the hours studied each day
+            var dailyHours = sessions
+                .GroupBy(s => s.Date.DayOfWeek)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Sum(s => s.Duration.Value.TotalHours)
+                );
+
+            // Prepare data for LiveCharts (Monday to Sunday = index 0 to 6)
+            var values = new double[7];
+            // Labels for X-axis (Mon, Tue, Wed, etc.)
+            var labels = new[] { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
+
+            // Fill in the hours for each day
+            for (int i = 0; i < 7; i++)
+            {
+                // Map array index to DayOfWeek (Monday=1, Sunday=0 in .NET)
+                var day = (DayOfWeek)(i == 0 ? 1 : i);
+
+                // If we have data for this day, use it; otherwise default to 0
+                if (dailyHours.TryGetValue(day, out var hours))
+                {
+                    values[i] = hours;
+                }
+            }
+
+            // Update the chart data
+            // This triggers UI update automatically via [ObservableProperty]
+            WeeklyStudySeries = new ISeries[]
+            {
+            new ColumnSeries<double>
+            {
+                Values = values,
+                Name = "Hours Studied",
+                MiniatureStrokeThickness = 0  // No border around bars
+            }
+            };
+        }
+        #endregion
+
+        // ========== REPORT GENERATION ==========
+        #region Reports
+
+        /// <summary>
+        /// Command for the "Generate Report" button.
+        /// Creates a PDF with weekly study statistics.
+        /// </summary>
+        public IAsyncRelayCommand GenerateReportCommand { get; }
+
+        /// <summary>
+        /// Generates a PDF report of weekly study sessions using QuestPDF.
+        /// Saves the PDF to the application's bin folder.
+        /// </summary>
+        private async Task GenerateReportAsync()
+        {
+            try
+            {
+                // Calculate current week range
+                var today = DateTime.UtcNow.Date;
+                var weekStart = today.AddDays(-(int)today.DayOfWeek);
+                var weekEnd = weekStart.AddDays(6);
+
+                // Fetch all sessions for this week
+                var sessions = await _studySessionService.GetWeeklySessionsAsync(weekStart, weekEnd);
+
+                // Create report service and generate PDF
+                var pdfPath = $"StudyReport_{weekStart:yyyy-MM-dd}.pdf";
+                ReportService.GenerateWeeklyReport(sessions, pdfPath);
+
+                _logger.LogInformation($"Report generated at {pdfPath}");
+            }
+#pragma warning disable CA1031 // Generic catch acceptable for report generation
+            catch (Exception ex) { _logger.LogError(ex, "Failed to generate report"); }
+#pragma warning restore CA1031
+        }
+        #endregion
+
+        // ========== CLEANUP (Memory Leak Prevention) ==========
         #region IDisposable
 
         /// <summary>
@@ -261,27 +465,17 @@ namespace StudyPlanner.Presentation.ViewModels
         /// </summary>
         public void Dispose()
         {
-            Dispose(true);
-            GC.SuppressFinalize(this);  // Tells garbage collector we already cleaned up
-        }
+            if (_disposed) return;
 
-        /// <summary>
-        /// Protected virtual Dispose pattern (allows inheritance if needed).
-        /// disposing=true means called from user code, false means called from finalizer.
-        /// </summary>
-        public void Dispose(bool disposing)
-        {
-            if (_disposed) return;  // Prevent double-disposal
-
-            if (disposing)
-            {
-                // Unsubscribe from events - CRITICAL to prevent memory leaks
-                // If we don't do this, the timer keeps references to this ViewModel
-                _timerService.Tick -= OnTimerTick;
-                _timerService.StateChanged -= OnStateChanged;
-            }
+            // Unsubscribe from ALL timer events
+            // If we don't do this, the timer keeps references to this ViewModel
+            // and it can't be garbage collected (memory leak)
+            _timerService.Tick -= OnTimerTick;
+            _timerService.StateChanged -= OnStateChanged;
+            _timerService.WorkPhaseCompleted -= OnWorkPhaseCompleted;
 
             _disposed = true;
+            GC.SuppressFinalize(this);  // Tells garbage collector we already cleaned up
         }
         #endregion
     }
