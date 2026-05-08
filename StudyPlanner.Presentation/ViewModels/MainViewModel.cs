@@ -1,10 +1,3 @@
-using System;
-using System.Collections.ObjectModel;
-using System.Globalization;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LiveChartsCore;
@@ -16,6 +9,16 @@ using StudyPlanner.Application.Services;
 using StudyPlanner.Core.Entities;
 using StudyPlanner.Core.Enums;
 using StudyPlanner.Core.Events;
+using StudyPlanner.Presentation.Services;
+using System;
+using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Input;
+using System.Windows.Threading;
+
 
 namespace StudyPlanner.Presentation.ViewModels
 {
@@ -47,6 +50,11 @@ namespace StudyPlanner.Presentation.ViewModels
         /// </summary>
         private readonly IStudySessionService _studySessionService;
 
+        // Durações configuráveis do Pomodoro (em segundos)
+        private readonly TimeSpan _workDuration = TimeSpan.FromMinutes(25);
+        private readonly TimeSpan _breakDuration = TimeSpan.FromMinutes(5);
+        // private readonly TimeSpan _longBreakDuration = TimeSpan.FromMinutes(15);
+
         /// <summary>
         /// Logger for debugging and error tracking.
         /// Writes to console during development.
@@ -64,6 +72,39 @@ namespace StudyPlanner.Presentation.ViewModels
         /// Prevents memory leaks and null reference exceptions.
         /// </summary>
         private bool _disposed;
+
+        // ========== V1.1: TIMER CIRCULAR E TEMA ==========
+        /// <summary>
+        /// Circunferência do círculo do timer (2 * π * raio).
+        /// Usado para animação do StrokeDashOffset no WPF.
+        /// Raio efetivo = 90px, então: 2 * Math.PI * 90 ≈ 565.487
+        /// </summary>
+        private const double CircleCircumference = 565.487;
+
+        /// <summary>
+        /// Matéria selecionada pelo usuário para registrar a sessão.
+        /// Se null, usa a primeira da lista como fallback.
+        /// </summary>
+        [ObservableProperty] private Subject? _selectedSubject;
+
+        /// <summary>
+        /// Controla se o tema escuro está ativo.
+        /// Bindado ao ToggleButton no XAML.
+        /// </summary>
+        [ObservableProperty] private bool _isDarkTheme;
+
+        /// <summary>
+        /// Controla o preenchimento visual do timer circular.
+        /// Quanto maior o valor, menor a barra visível (efeito de countdown).
+        /// Bindado ao StrokeDashOffset do Ellipse no XAML.
+        /// </summary>
+        [ObservableProperty] private double _timerDashOffset;
+
+        /// <summary>
+        /// Comando para alternar entre tema claro e escuro.
+        /// </summary>
+        public ICommand ToggleThemeCommand { get; }
+
 
         /// <summary>
         /// Constructor - Called by Dependency Injection when MainWindow opens.
@@ -94,6 +135,17 @@ namespace StudyPlanner.Presentation.ViewModels
             StartTimerCommand = new AsyncRelayCommand(StartTimerAsync, () => !IsTimerRunning);
             StopTimerCommand = new AsyncRelayCommand(StopTimerAsync, () => IsTimerRunning);
             GenerateReportCommand = new AsyncRelayCommand(GenerateReportAsync);
+
+            // ========== V1.1: COMANDO DE TEMA ==========
+            // RelayCommand da CommunityToolkit para ação síncrona simples
+            ToggleThemeCommand = new RelayCommand(() =>
+            {
+                // Inverte o estado atual
+                IsDarkTheme = !IsDarkTheme;
+
+                // Aplica o tema via ThemeManager (atualiza ResourceDictionary em runtime)
+                ThemeManager.ApplyTheme(IsDarkTheme);
+            });
 
             // ========== SUBSCRIBE TO TIMER EVENTS ==========
             // Timer runs on background thread, raises events when it ticks or changes state
@@ -282,40 +334,59 @@ namespace StudyPlanner.Presentation.ViewModels
         }
 
         /// <summary>
-        /// Called by ITimerService when a 25-minute work phase completes.
-        /// Automatically records a study session and updates the chart.
+        /// Chamado quando uma sessão de trabalho Pomodoro é concluída.
+        /// Registra automaticamente a sessão para a matéria selecionada.
         /// </summary>
         private void OnWorkPhaseCompleted(object? sender, WorkPhaseCompletedEventArgs e)
         {
             if (_disposed) return;
 
-            // Only record session if we have at least one subject
-            // In a real app, you'd track which subject is currently selected
-            if (Subjects.Any())
-            {
-                // Use the first subject (you could add a SelectedSubject property instead)
-                var firstSubject = Subjects.First();
+            // ========== SELECIONAR MATÉRIA PARA REGISTRAR ==========
 
-                // Record the completed session in the database
-                // This happens automatically - user doesn't need to do anything
+            // Prioriza a matéria selecionada pelo usuário no ComboBox
+            // Se nenhuma estiver selecionada, usa a primeira da lista como fallback
+            var subjectToRecord = SelectedSubject ?? Subjects.FirstOrDefault();
+
+            // Só registra se houver uma matéria válida
+            if (subjectToRecord != null)
+            {
+                // Registra a sessão no banco de dados (async fire-and-forget)
                 _ = _studySessionService.RecordSessionAsync(
-                    firstSubject.Id,
+                    subjectToRecord.Id,
                     DateTime.UtcNow,
                     e.Duration);
 
-                // Refresh the weekly chart to show the new session
+                // Atualiza o gráfico de estatísticas para refletir a nova sessão
                 _ = SafeLoadWeeklyChartDataAsync();
             }
         }
 
         /// <summary>
-        /// Formats TimeSpan as "mm:ss" string for display.
-        /// Uses InvariantCulture to ensure consistent formatting across locales.
+        /// Atualiza o display do timer E o progresso visual circular.
+        /// Calcula o percentual concluído e converte para StrokeDashOffset.
         /// </summary>
         private void UpdateTimerDisplay(TimeSpan remaining)
         {
+            // ========== CALCULAR PROGRESSO DO CÍRCULO ==========
+
+            // Determina a duração total baseada no estado atual (Work ou Break)
+            var totalSeconds = _timerService.CurrentState == PomodoroState.Work
+                ? _workDuration.TotalSeconds
+                : _breakDuration.TotalSeconds;
+
+            // Calcula segundos já decorridos
+            var elapsed = totalSeconds - remaining.TotalSeconds;
+
+            // Percentual de conclusão (0.0 a 1.0), com clamp para segurança
+            var percent = Math.Clamp(elapsed / totalSeconds, 0, 1);
+
+            // StrokeDashOffset: quanto maior, menos círculo visível
+            // Ex: 100% concluído → offset = circunferência → círculo some
+            TimerDashOffset = CircleCircumference * (1 - percent);
+
+            // ========== ATUALIZAR TEXDO DO TIMER ==========
             TimerDisplay = remaining.TotalSeconds <= 0
-                ? "00:00"  // Timer finished
+                ? "00:00"
                 : remaining.ToString(@"mm\:ss", CultureInfo.InvariantCulture);
         }
 

@@ -40,12 +40,14 @@ public partial class App : System.Windows.Application
     {
         try
         {
-            // ========== STEP 1: SET CULTURE ==========
-            // Set the application's culture to match the system
-            // This ensures dates, numbers, and strings format correctly for user's locale
-            var culture = CultureInfo.CurrentCulture;
-            Thread.CurrentThread.CurrentCulture = culture;
-            Thread.CurrentThread.CurrentUICulture = culture;
+            // ========== SET CULTURE ==========
+            var culture = System.Globalization.CultureInfo.CurrentCulture;
+            System.Threading.Thread.CurrentThread.CurrentCulture = culture;
+            System.Threading.Thread.CurrentThread.CurrentUICulture = culture;
+
+            // ========== APPLY DEFAULT THEME (Light) ==========
+            StudyPlanner.Presentation.Services.ThemeManager.ApplyTheme(false);
+
 
             // ========== STEP 2: BUILD APPLICATION HOST ==========
             // Host.CreateDefaultBuilder() creates a standard .NET Generic Host

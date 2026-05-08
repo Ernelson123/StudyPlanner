@@ -1,0 +1,21 @@
+<!-- Tema Claro: Cores suaves, alto contraste para leitura -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Cores Principais -->
+    <SolidColorBrush x:Key="BackgroundBrush" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#F8FAFC"/>
+    <SolidColorBrush x:Key="ForegroundBrush" Color="#0F172A"/>
+    <SolidColorBrush x:Key="MutedBrush" Color="#64748B"/>
+
+    <!-- Cores de Ação -->
+    <SolidColorBrush x:Key="PrimaryBrush" Color="#3B82F6"/>
+    <SolidColorBrush x:Key="PrimaryHoverBrush" Color="#2563EB"/>
+    <SolidColorBrush x:Key="SuccessBrush" Color="#10B981"/>
+    <SolidColorBrush x:Key="DangerBrush" Color="#EF4444"/>
+
+    <!-- Bordas e Divisores -->
+    <SolidColorBrush x:Key="BorderBrush" Color="#E2E8F0"/>
+    <SolidColorBrush x:Key="CircleTrackBrush" Color="#E2E8F0"/>
+    <SolidColorBrush x:Key="CircleProgressBrush" Color="#3B82F6"/>
+</ResourceDictionary>
