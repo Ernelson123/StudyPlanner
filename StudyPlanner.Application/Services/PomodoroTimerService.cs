@@ -2,118 +2,182 @@ using Microsoft.Extensions.Logging;
 using StudyPlanner.Core.Enums;
 using StudyPlanner.Core.Events;
 
-namespace StudyPlanner.Application.Services;
-
-public sealed class PomodoroTimerService : ITimerService, IDisposable
+namespace StudyPlanner.Application.Services
 {
-    private readonly ILogger<PomodoroTimerService> _logger;
-    private readonly PeriodicTimer _timer = new(TimeSpan.FromSeconds(1));
-
-    private readonly TimeSpan _workDuration = TimeSpan.FromMinutes(25);
-    private readonly TimeSpan _shortBreak = TimeSpan.FromMinutes(5);
-    private readonly TimeSpan _longBreak = TimeSpan.FromMinutes(15);
-
-    private int _completedPomodoros;
-    private int _secondsElapsed;
-    private CancellationTokenSource? _cts;
-    private TimeSpan _currentTargetDuration;
-
-    public event EventHandler<TimerTickEventArgs>? Tick;
-    public event EventHandler<StateChangedEventArgs>? StateChanged;
-    public event EventHandler<WorkPhaseCompletedEventArgs>? WorkPhaseCompleted;
-
-    public PomodoroState CurrentState { get; private set; } = PomodoroState.Idle;
-
-    public TimeSpan RemainingTime => _currentTargetDuration - TimeSpan.FromSeconds(_secondsElapsed);
-
-    public PomodoroTimerService(ILogger<PomodoroTimerService> logger)
+    /// <summary>
+    /// Core service managing the Pomodoro timer lifecycle.
+    /// Handles state transitions (Work -> Break -> Work), timing ticks, and phase completion events.
+    /// Runs on a background thread using PeriodicTimer for accurate 1-second intervals.
+    /// </summary>
+    public sealed class PomodoroTimerService : ITimerService, IDisposable
     {
-        _logger = logger;
-    }
+        private readonly ILogger<PomodoroTimerService> _logger;
 
-    public async Task StartAsync(CancellationToken cancellationToken = default)
-    {
-        if (CurrentState != PomodoroState.Idle)
-            throw new InvalidOperationException("Timer is already running.");
+        // Timer for 1-second ticks. Using PeriodicTimer for high-precision background timing.
+        private readonly PeriodicTimer _timer = new(TimeSpan.FromSeconds(1));
 
-        _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        // Mutable durations to support dynamic settings (v1.2)
+        private TimeSpan _workDuration = TimeSpan.FromMinutes(25);
+        private TimeSpan _shortBreakDuration = TimeSpan.FromMinutes(5);
+        private TimeSpan _longBreakDuration = TimeSpan.FromMinutes(15);
 
-        _logger.LogInformation("Starting Pomodoro cycle");
-        await SetStateAsync(PomodoroState.Work);
+        private int _completedPomodoros;
+        private int _secondsElapsed;
+        private CancellationTokenSource? _cts;
+        private TimeSpan _currentTargetDuration;
 
-        try
+        // Events for UI updates and session recording
+        public event EventHandler<TimerTickEventArgs>? Tick;
+        public event EventHandler<StateChangedEventArgs>? StateChanged;
+        public event EventHandler<WorkPhaseCompletedEventArgs>? WorkPhaseCompleted;
+
+        public PomodoroState CurrentState { get; private set; } = PomodoroState.Idle;
+
+        /// <summary>
+        /// Calculates remaining time based on current target duration and elapsed seconds.
+        /// </summary>
+        public TimeSpan RemainingTime => _currentTargetDuration - TimeSpan.FromSeconds(_secondsElapsed);
+
+        public PomodoroTimerService(ILogger<PomodoroTimerService> logger)
         {
-            while (await _timer.WaitForNextTickAsync(_cts.Token))
-            {
-                _secondsElapsed++;
-                Tick?.Invoke(this, new TimerTickEventArgs(RemainingTime));
+            _logger = logger;
+        }
 
-                if (_secondsElapsed >= _currentTargetDuration.TotalSeconds)
+        /// <summary>
+        /// Starts the Pomodoro cycle from the Idle state.
+        /// Throws InvalidOperationException if already running.
+        /// </summary>
+        public async Task StartAsync(CancellationToken cancellationToken = default)
+        {
+            if (CurrentState != PomodoroState.Idle)
+                throw new InvalidOperationException("Timer is already running.");
+
+            // Link external cancellation token with internal CTS for cooperative cancellation
+            _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+            _logger.LogInformation("Starting Pomodoro cycle");
+
+            // Transition to Work state immediately
+            SetState(PomodoroState.Work);
+
+            try
+            {
+                // Main timer loop: waits for 1-second ticks
+                while (await _timer.WaitForNextTickAsync(_cts.Token))
                 {
-                    await HandlePhaseCompletion();
+                    _secondsElapsed++;
+
+                    // Notify UI of progress
+                    Tick?.Invoke(this, new TimerTickEventArgs(RemainingTime));
+
+                    // Check if current phase is complete
+                    if (_secondsElapsed >= _currentTargetDuration.TotalSeconds)
+                    {
+                        await HandlePhaseCompletion();
+                    }
                 }
             }
+            catch (OperationCanceledException)
+            {
+                // Expected behavior when StopAsync is called or token is cancelled
+                _logger.LogInformation("Timer stopped or cancelled.");
+            }
+            finally
+            {
+                // Ensure we return to Idle state even if an error occurs
+                CurrentState = PomodoroState.Idle;
+                StateChanged?.Invoke(this, new StateChangedEventArgs(PomodoroState.Idle));
+            }
         }
-        catch (OperationCanceledException)
+
+        /// <summary>
+        /// Stops the timer gracefully by cancelling the ongoing task.
+        /// </summary>
+        public async Task StopAsync()
         {
-            // Expected on Stop
+            if (_cts != null)
+            {
+                await _cts.CancelAsync();
+            }
         }
-        finally
+
+        /// <summary>
+        /// Updates the durations for Work, Short Break, and Long Break.
+        /// Called when user saves new settings.
+        /// If the timer is running, it will continue with the old duration until the next phase.
+        /// </summary>
+        public void UpdateDurations(TimeSpan work, TimeSpan shortBreak, TimeSpan longBreak)
         {
-            CurrentState = PomodoroState.Idle;
-            StateChanged?.Invoke(this, new StateChangedEventArgs(PomodoroState.Idle));
+            _workDuration = work;
+            _shortBreakDuration = shortBreak;
+            _longBreakDuration = longBreak;
+
+            // If currently idle, update the target duration immediately so UI reflects changes
+            if (CurrentState == PomodoroState.Idle)
+            {
+                _currentTargetDuration = _workDuration;
+                Tick?.Invoke(this, new TimerTickEventArgs(RemainingTime));
+            }
         }
-    }
 
-    public async Task StopAsync()
-    {
-        if (_cts != null) await _cts.CancelAsync();
-    }
-
-    private async Task HandlePhaseCompletion()
-    {
-        _logger.LogInformation("Phase completed: {State}", CurrentState);
-
-        if (CurrentState == PomodoroState.Work)
+        /// <summary>
+        /// Handles logic when a phase (Work or Break) completes.
+        /// Transitions to the next appropriate state.
+        /// </summary>
+        private async Task HandlePhaseCompletion()
         {
-            // RAISE EVENT: Notify subscribers that a work phase just finished
-            // This triggers automatic session recording in the ViewModel
-            // The event passes the work duration (25 minutes) so we know how long was studied
-            WorkPhaseCompleted?.Invoke(this, new WorkPhaseCompletedEventArgs(_workDuration));
+            _logger.LogInformation("Phase completed: {State}", CurrentState);
 
-            _completedPomodoros++;
-            // After 4 pomodoros, take a long break (15 min)
-            if (_completedPomodoros % 4 == 0)
-                await SetStateAsync(PomodoroState.LongBreak);
+            if (CurrentState == PomodoroState.Work)
+            {
+                // Raise event to record study session
+                WorkPhaseCompleted?.Invoke(this, new WorkPhaseCompletedEventArgs(_workDuration));
+
+                _completedPomodoros++;
+
+                // Determine next break type: Long break after every 4 pomodoros
+                if (_completedPomodoros % 4 == 0)
+                    SetState(PomodoroState.LongBreak);
+                else
+                    SetState(PomodoroState.ShortBreak);
+            }
             else
-                await SetStateAsync(PomodoroState.ShortBreak);
+            {
+                // Break is over, start a new work session
+                SetState(PomodoroState.Work);
+            }
+
+            _secondsElapsed = 0;
         }
-        else
+
+        /// <summary>
+        /// Synchronously updates the current state and target duration.
+        /// Raises StateChanged event for UI updates.
+        /// </summary>
+        private void SetState(PomodoroState newState)
         {
-            // Break is over, start a new work session
-            await SetStateAsync(PomodoroState.Work);
+            CurrentState = newState;
+
+            // Set target duration based on new state
+            _currentTargetDuration = newState switch
+            {
+                PomodoroState.Work => _workDuration,
+                PomodoroState.ShortBreak => _shortBreakDuration,
+                PomodoroState.LongBreak => _longBreakDuration,
+                _ => TimeSpan.Zero
+            };
+
+            StateChanged?.Invoke(this, new StateChangedEventArgs(newState));
         }
 
-        _secondsElapsed = 0;
-    }
-
-    private async Task SetStateAsync(PomodoroState newState)
-    {
-        CurrentState = newState;
-        _currentTargetDuration = newState switch
+        /// <summary>
+        /// Disposes resources to prevent memory leaks.
+        /// </summary>
+        public void Dispose()
         {
-            PomodoroState.Work => _workDuration,
-            PomodoroState.ShortBreak => _shortBreak,
-            PomodoroState.LongBreak => _longBreak,
-            _ => TimeSpan.Zero
-        };
-        StateChanged?.Invoke(this, new StateChangedEventArgs(newState));
-        await Task.CompletedTask;
-    }
-
-    public void Dispose()
-    {
-        _cts?.Dispose();
-        _timer.Dispose();
+            _cts?.Cancel();
+            _cts?.Dispose();
+            _timer.Dispose();
+        }
     }
 }

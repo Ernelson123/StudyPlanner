@@ -1,4 +1,3 @@
-using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -43,10 +42,9 @@ namespace StudyPlanner.Data.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-#pragma warning disable CA1062 // Validate arguments of public methods
+
             migrationBuilder.DropTable(
                 name: "StudySessions");
-#pragma warning restore CA1062 // Validate arguments of public methods
 
             migrationBuilder.DropTable(
                 name: "Subjects");

@@ -15,5 +15,11 @@ namespace StudyPlanner.Application.Services
 
         Task StartAsync(CancellationToken cancellationToken = default);
         Task StopAsync();
+
+        /// <summary>
+        /// Atualiza as durações do timer em runtime.
+        /// Usado quando o usuário altera as configurações.
+        /// </summary>
+        void UpdateDurations(TimeSpan work, TimeSpan shortBreak, TimeSpan longBreak);
     }
 }

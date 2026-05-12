@@ -3,283 +3,479 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:vm="clr-namespace:StudyPlanner.Presentation.ViewModels;assembly=StudyPlanner.Presentation"
+        xmlns:vm="clr-namespace:StudyPlanner.Presentation.ViewModels"
         xmlns:converters="clr-namespace:StudyPlanner.Presentation.Converters"
+        xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
+        xmlns:sys="clr-namespace:System;assembly=mscorlib"
         mc:Ignorable="d"
-        Title="Study Planner" Height="680" Width="1050"
+        Title="Study Planner"
+        Height="700" Width="1100"
+        MinHeight="600" MinWidth="900"
         Background="{DynamicResource BackgroundBrush}"
         Foreground="{DynamicResource ForegroundBrush}"
         d:DataContext="{d:DesignInstance Type=vm:MainViewModel, IsDesignTimeCreatable=False}">
 
     <Window.Resources>
-        <converters:BoolToStringConverter x:Key="BoolToTextConverter"/>
-    </Window.Resources>
+        <converters:BoolToStringConverter  x:Key="BoolToTextConverter"/>
+        <converters:HoursToStringConverter x:Key="HoursToStringConverter"/>
 
-    <!-- 🔑 ATALHOS DE TECLADO -->
-    <Window.InputBindings>
-        <!-- Espaço = Iniciar/Pausar -->
-        <KeyBinding Key="Space" Command="{Binding StartTimerCommand}" />
-        <!-- ESC = Parar completamente -->
-        <KeyBinding Key="Escape" Command="{Binding StopTimerCommand}" />
-    </Window.InputBindings>
-
-    <Grid Margin="24">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="2*"/>
-            <ColumnDefinition Width="1*"/>
-        </Grid.ColumnDefinitions>
-
-        <!-- HEADER + THEME TOGGLE -->
-        <Grid Grid.ColumnSpan="2" Margin="0,0,0,20">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-
-            <TextBlock Text="Study Planner" FontSize="32" FontWeight="Bold" 
-                       VerticalAlignment="Center"/>
-
-            <!-- Botão Dark/Light -->
-            <ToggleButton Grid.Column="1" 
-                          Content="{Binding IsDarkTheme, Converter={StaticResource BoolToTextConverter}}"
-                          Padding="12,8"
-                          Background="{DynamicResource SurfaceBrush}"
-                          BorderBrush="{DynamicResource BorderBrush}"
-                          Command="{Binding ToggleThemeCommand}"
-                          ToolTip="Alternar Tema (Claro/Escuro)">
-                <ToggleButton.Style>
-                    <Style TargetType="ToggleButton">
-                        <Setter Property="Template">
-                            <Setter.Value>
-                                <ControlTemplate TargetType="ToggleButton">
-                                    <Border Background="{TemplateBinding Background}" 
-                                            BorderBrush="{TemplateBinding BorderBrush}" 
-                                            BorderThickness="1" CornerRadius="8" 
-                                            Padding="{TemplateBinding Padding}">
-                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                    </Border>
-                                </ControlTemplate>
-                            </Setter.Value>
-                        </Setter>
-                        <Style.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="{DynamicResource BorderBrush}"/>
-                            </Trigger>
-                        </Style.Triggers>
-                    </Style>
-                </ToggleButton.Style>
-            </ToggleButton>
-        </Grid>
-
-        <!-- SELETOR DE MATÉRIA -->
-        <ComboBox Grid.Row="1" Grid.ColumnSpan="2" 
-                  ItemsSource="{Binding Subjects}"
-                  SelectedItem="{Binding SelectedSubject}"
-                  DisplayMemberPath="Name"
-                  Margin="0,0,0,20"
-                  Padding="10,8"
-                  Background="{DynamicResource SurfaceBrush}"
-                  BorderBrush="{DynamicResource BorderBrush}"
-                  Foreground="{DynamicResource ForegroundBrush}"
-                  ToolTip="Selecione a matéria que está estudando">
-            <ComboBox.ItemContainerStyle>
-                <Style TargetType="ComboBoxItem">
-                    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
-                    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}"/>
-                </Style>
-            </ComboBox.ItemContainerStyle>
-        </ComboBox>
-
-        <!-- TIMER CIRCULAR (Lado Direito) -->
-        <Border Grid.Column="1" Grid.Row="2" 
-                Background="{DynamicResource SurfaceBrush}" 
-                CornerRadius="12" Padding="24" Margin="0,0,0,0">
-            <StackPanel HorizontalAlignment="Center">
-                <TextBlock Text="Pomodoro Timer" FontSize="18" FontWeight="SemiBold" 
-                           HorizontalAlignment="Center" Margin="0,0,0,20"
-                           Foreground="{DynamicResource MutedBrush}"/>
-
-                <!-- Círculo de Progresso -->
-                <Grid Width="220" Height="220">
-                    <!-- Trilho de fundo -->
-                    <Ellipse Stroke="{DynamicResource CircleTrackBrush}" 
-                             StrokeThickness="12" Fill="Transparent"/>
-
-                    <!-- Barra de progresso (controlada por StrokeDashOffset) -->
-                    <Ellipse Stroke="{DynamicResource CircleProgressBrush}" 
-                             StrokeThickness="12" Fill="Transparent"
-                             StrokeDashArray="565.487"
-                             StrokeDashOffset="{Binding TimerDashOffset}"
-                             RenderTransformOrigin="0.5,0.5">
-                        <Ellipse.RenderTransform>
-                            <RotateTransform Angle="-90"/>
-                            <!-- Começa do topo -->
-                        </Ellipse.RenderTransform>
-                    </Ellipse>
-
-                    <!-- Texto central -->
-                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                        <TextBlock Text="{Binding TimerDisplay}" 
-                                   FontSize="48" FontWeight="Bold" 
-                                   HorizontalAlignment="Center"/>
-                        <TextBlock Text="{Binding CurrentState}" 
-                                   FontSize="14" 
-                                   Foreground="{DynamicResource MutedBrush}"
-                                   HorizontalAlignment="Center" Margin="0,4,0,0"/>
-                    </StackPanel>
-                </Grid>
-
-                <!-- Botões de Controle -->
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,24,0,0">
-                    <Button Content="▶ Start" Padding="20,10" Margin="0,0,10,0"
-                            Command="{Binding StartTimerCommand}"
-                            Background="{DynamicResource SuccessBrush}" 
-                            Foreground="White" BorderThickness="0" Cursor="Hand">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
-                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
-                            </ControlTemplate>
-                        </Button.Template>
-                        <Button.Style>
-                            <Style TargetType="Button">
-                                <Style.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter Property="Background" Value="{DynamicResource PrimaryHoverBrush}"/>
-                                    </Trigger>
-                                    <Trigger Property="IsEnabled" Value="False">
-                                        <Setter Property="Opacity" Value="0.5"/>
-                                    </Trigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
-
-                    <Button Content="⏹ Stop" Padding="20,10"
-                            Command="{Binding StopTimerCommand}"
-                            Background="{DynamicResource DangerBrush}" 
-                            Foreground="White" BorderThickness="0" Cursor="Hand">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
-                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
-                            </ControlTemplate>
-                        </Button.Template>
-                        <Button.Style>
-                            <Style TargetType="Button">
-                                <Style.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
-                                    </Trigger>
-                                    <Trigger Property="IsEnabled" Value="False">
-                                        <Setter Property="Opacity" Value="0.5"/>
-                                    </Trigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
-                </StackPanel>
-
-                <TextBlock Text="Dica: Use Espaço para iniciar, Esc para parar" 
-                           FontSize="12" Foreground="{DynamicResource MutedBrush}" 
-                           HorizontalAlignment="Center" Margin="0,16,0,0" TextWrapping="Wrap"/>
-            </StackPanel>
-        </Border>
-
-        <!-- INPUT DE NOVA MATÉRIA (Lado Esquerdo) -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,20">
-            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" 
-                    CornerRadius="8" Width="300" Margin="0,0,10,0" 
-                    Background="{DynamicResource SurfaceBrush}">
-                <TextBox Padding="12,8" FontSize="14"
-                         Text="{Binding NewSubjectName, UpdateSourceTrigger=PropertyChanged}"
-                         ToolTip="Nome da matéria" BorderThickness="0" 
-                         Background="Transparent" Foreground="{DynamicResource ForegroundBrush}"/>
-            </Border>
-
-            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" 
-                    CornerRadius="8" Width="100" Margin="0,0,10,0"
-                    Background="{DynamicResource SurfaceBrush}">
-                <TextBox Padding="12,8" FontSize="14"
-                         Text="{Binding NewPriority, UpdateSourceTrigger=PropertyChanged}"
-                         ToolTip="Prioridade (1-10)" BorderThickness="0" 
-                         Background="Transparent" Foreground="{DynamicResource ForegroundBrush}"/>
-            </Border>
-
-            <Button Content="Add Subject" Padding="16,8" FontSize="14"
-                    Command="{Binding AddSubjectCommand}"
-                    Background="{DynamicResource PrimaryBrush}" 
-                    Foreground="White" BorderThickness="0" Cursor="Hand">
-                <Button.Template>
+        <!-- Icon Button -->
+        <Style x:Key="IconButtonStyle" TargetType="Button">
+            <Setter Property="Background"       Value="Transparent"/>
+            <Setter Property="BorderThickness"  Value="0"/>
+            <Setter Property="Cursor"           Value="Hand"/>
+            <Setter Property="Padding"          Value="10"/>
+            <Setter Property="Template">
+                <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                     </ControlTemplate>
-                </Button.Template>
-                <Button.Style>
-                    <Style TargetType="Button">
-                        <Style.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="{DynamicResource PrimaryHoverBrush}"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" Value="0.5"/>
-                            </Trigger>
-                        </Style.Triggers>
-                    </Style>
-                </Button.Style>
-            </Button>
-        </StackPanel>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
 
-        <!-- LISTA DE MATÉRIAS (Lado Esquerdo) -->
-        <Border Grid.Row="2" 
-                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                CornerRadius="12" Background="{DynamicResource SurfaceBrush}" Margin="0,0,12,0">
-            <ListBox ItemsSource="{Binding Subjects}"
-                     SelectedItem="{Binding SelectedSubject}"
-                     DisplayMemberPath="Name"
-                     SelectionMode="Single"
-                     BorderThickness="0" Padding="8"
-                     Background="Transparent"
-                     Foreground="{DynamicResource ForegroundBrush}">
-                <ListBox.ItemContainerStyle>
-                    <Style TargetType="ListBoxItem">
-                        <Setter Property="Padding" Value="12,10"/>
-                        <Setter Property="Margin" Value="0,2"/>
-                        <Setter Property="BorderBrush" Value="Transparent"/>
-                        <Setter Property="BorderThickness" Value="1"/>
-                        <Setter Property="Template">
-                            <Setter.Value>
-                                <ControlTemplate TargetType="ListBoxItem">
-                                    <Border Background="{TemplateBinding Background}" 
-                                            BorderBrush="{TemplateBinding BorderBrush}" 
-                                            BorderThickness="{TemplateBinding BorderThickness}"
-                                            CornerRadius="6" Padding="{TemplateBinding Padding}">
-                                        <ContentPresenter/>
-                                    </Border>
-                                    <ControlTemplate.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="{DynamicResource BorderBrush}"/>
-                                        </Trigger>
-                                        <Trigger Property="IsSelected" Value="True">
-                                            <Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
-                                            <Setter Property="Foreground" Value="White"/>
-                                        </Trigger>
-                                    </ControlTemplate.Triggers>
-                                </ControlTemplate>
-                            </Setter.Value>
-                        </Setter>
-                    </Style>
-                </ListBox.ItemContainerStyle>
-            </ListBox>
+        <!-- Modern TextBox -->
+        <Style x:Key="ModernTextBoxStyle" TargetType="TextBox">
+            <Setter Property="Background"       Value="{DynamicResource InputBackgroundBrush}"/>
+            <Setter Property="Foreground"       Value="{DynamicResource ForegroundBrush}"/>
+            <Setter Property="BorderBrush"      Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness"  Value="1"/>
+            <Setter Property="Padding"          Value="12,10"/>
+            <Setter Property="FontSize"         Value="14"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="5,0,5,0" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Modern ComboBox -->
+        <Style x:Key="ModernComboBoxStyle" TargetType="ComboBox">
+            <Setter Property="Background"      Value="{DynamicResource InputBackgroundBrush}"/>
+            <Setter Property="Foreground"      Value="{DynamicResource ForegroundBrush}"/>
+            <Setter Property="BorderBrush"     Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"         Value="12,10"/>
+            <Setter Property="FontSize"        Value="14"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton Name="ToggleButton"
+                                          Focusable="false"
+                                          IsChecked="{Binding Path=IsDropDownOpen, Mode=TwoWay,
+                                                      RelativeSource={RelativeSource TemplatedParent}}"
+                                          ClickMode="Press">
+                                <ToggleButton.Template>
+                                    <ControlTemplate>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition/>
+                                                <ColumnDefinition Width="20"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Border x:Name="Border" Grid.ColumnSpan="2"
+                                                    Background="{DynamicResource InputBackgroundBrush}"
+                                                    BorderBrush="{DynamicResource BorderBrush}"
+                                                    BorderThickness="1" CornerRadius="8"/>
+                                            <Path x:Name="Arrow" Grid.Column="1"
+                                                  Fill="{DynamicResource MutedBrush}"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  Data="M 0 0 L 4 4 L 8 0 Z"/>
+                                        </Grid>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+
+                            <ContentPresenter Name="ContentSite" IsHitTestVisible="False"
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              Margin="12,3,23,3"
+                                              VerticalAlignment="Center" HorizontalAlignment="Left"/>
+
+                            <Popup Name="Popup" Placement="Bottom"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   AllowsTransparency="True" Focusable="False"
+                                   PopupAnimation="Slide">
+                                <Grid Name="DropDown" SnapsToDevicePixels="True"
+                                      MinWidth="{TemplateBinding ActualWidth}"
+                                      MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                    <Border x:Name="DropDownBorder"
+                                            Background="{DynamicResource SurfaceBrush}"
+                                            BorderBrush="{DynamicResource BorderBrush}"
+                                            BorderThickness="1" CornerRadius="8"/>
+                                    <ScrollViewer Margin="4,6,4,6" SnapsToDevicePixels="True">
+                                        <StackPanel IsItemsHost="True"
+                                                    KeyboardNavigation.DirectionalNavigation="Contained"/>
+                                    </ScrollViewer>
+                                </Grid>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="HasItems" Value="false">
+                                <Setter TargetName="DropDownBorder" Property="MinHeight" Value="95"/>
+                            </Trigger>
+                            <Trigger SourceName="Popup" Property="AllowsTransparency" Value="true">
+                                <Setter TargetName="DropDownBorder" Property="CornerRadius" Value="8"/>
+                                <Setter TargetName="DropDownBorder" Property="Margin"       Value="0,2,0,0"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Primary Button -->
+        <Style x:Key="PrimaryButtonStyle" TargetType="Button">
+            <Setter Property="Background"  Value="{DynamicResource PrimaryBrush}"/>
+            <Setter Property="Foreground"  Value="White"/>
+            <Setter Property="FontWeight"  Value="Bold"/>
+            <Setter Property="Cursor"      Value="Hand"/>
+            <Setter Property="Padding"     Value="15,10"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource PrimaryHoverBrush}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.5"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Action Button (Start / Stop) -->
+        <Style x:Key="ActionButtonStyle" TargetType="Button">
+            <Setter Property="Foreground"  Value="White"/>
+            <Setter Property="FontWeight"  Value="Bold"/>
+            <Setter Property="Cursor"      Value="Hand"/>
+            <Setter Property="Padding"     Value="15"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Opacity" Value="0.85"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.4"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="300"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ======================================================= -->
+        <!-- LEFT SIDEBAR                                             -->
+        <!-- ======================================================= -->
+        <Border Grid.Column="0"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,1,0">
+            <Grid Margin="20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Sidebar Header -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,20">
+                    <TextBlock Text="SUBJECTS" FontSize="14" FontWeight="Bold"
+                               Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding Subjects.Count, StringFormat='({0})'}"
+                               FontSize="14" Foreground="{DynamicResource MutedBrush}"
+                               Margin="10,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- Add Subject -->
+                <StackPanel Grid.Row="1" Margin="0,0,0,20">
+                    <TextBox Style="{StaticResource ModernTextBoxStyle}"
+                             Text="{Binding NewSubjectName, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Subject Name"
+                             Margin="0,0,0,10"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="80"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0"
+                                 Style="{StaticResource ModernTextBoxStyle}"
+                                 Text="{Binding NewPriority, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="Priority (1-10)"
+                                 Margin="0,0,10,0"/>
+                        <Button Grid.Column="1" Content="Add"
+                                Command="{Binding AddSubjectCommand}"
+                                Style="{StaticResource PrimaryButtonStyle}"/>
+                    </Grid>
+                </StackPanel>
+
+                <!-- Subjects List -->
+                <ListBox Grid.Row="2"
+                         ItemsSource="{Binding Subjects}"
+                         SelectedItem="{Binding SelectedSubject}"
+                         Background="Transparent" BorderThickness="0" Padding="0">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Padding" Value="15,12"/>
+                            <Setter Property="Margin"  Value="0,2"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <Border Background="{TemplateBinding Background}"
+                                                CornerRadius="8"
+                                                Padding="{TemplateBinding Padding}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Ellipse Grid.Column="0" Width="10" Height="10"
+                                                         Fill="{DynamicResource PrimaryBrush}"
+                                                         Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="1"
+                                                           Text="{Binding Name}"
+                                                           Foreground="{DynamicResource ForegroundBrush}"
+                                                           VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="2"
+                                                           Text="{Binding PriorityWeight}"
+                                                           Foreground="{DynamicResource MutedBrush}"
+                                                           FontWeight="Bold"
+                                                           VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter Property="Background" Value="{DynamicResource BorderBrush}"/>
+                                            </Trigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="{DynamicResource HeaderBrush}"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                </ListBox>
+            </Grid>
         </Border>
+
+        <!-- ======================================================= -->
+        <!-- RIGHT CONTENT                                            -->
+        <!-- ======================================================= -->
+        <Grid Grid.Column="1" Margin="30">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Top Bar -->
+            <Grid Grid.Row="0" Margin="0,0,0,30">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel>
+                    <TextBlock Text="Study Planner" FontSize="28" FontWeight="Bold"/>
+                    <TextBlock Text="Stay focused and track your progress"
+                               Foreground="{DynamicResource MutedBrush}" Margin="0,5,0,0"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <!-- Export CSV -->
+                    <Button Command="{Binding ExportCsvCommand}"
+                            Style="{StaticResource IconButtonStyle}"
+                            ToolTip="Export to CSV" Margin="0,0,10,0">
+                        <TextBlock Text="📊" FontSize="20"/>
+                    </Button>
+                    <!-- Settings -->
+                    <Button Command="{Binding OpenSettingsCommand}"
+                            Style="{StaticResource IconButtonStyle}"
+                            ToolTip="Settings" Margin="0,0,10,0">
+                        <TextBlock Text="⚙️" FontSize="20"/>
+                    </Button>
+                    <!-- Theme Toggle -->
+                    <ToggleButton Command="{Binding ToggleThemeCommand}"
+                                  Content="{Binding IsDarkTheme, Converter={StaticResource BoolToTextConverter}}"
+                                  Padding="12,8"
+                                  Background="{DynamicResource SurfaceBrush}"
+                                  BorderBrush="{DynamicResource BorderBrush}"
+                                  BorderThickness="1"
+                                  Foreground="{DynamicResource ForegroundBrush}">
+                        <ToggleButton.Template>
+                            <ControlTemplate TargetType="ToggleButton">
+                                <Border Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="1" CornerRadius="8"
+                                        Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                            </ControlTemplate>
+                        </ToggleButton.Template>
+                    </ToggleButton>
+                </StackPanel>
+            </Grid>
+
+            <!-- Dashboard -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="400"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Weekly Chart -->
+                <Border Grid.Column="0"
+                        Background="{DynamicResource SurfaceBrush}"
+                        CornerRadius="12" Padding="20" Margin="0,0,20,0">
+                    <StackPanel>
+                        <TextBlock Text="Weekly Progress"
+                                   FontSize="18" FontWeight="Bold" Margin="0,0,0,15"/>
+
+                        <!--
+                            ✅ CORRIGIDO: usa XAxes / YAxes em vez de Axes
+                               (API correcta para LiveChartsCore.SkiaSharpView.WPF v2)
+                        -->
+                        <lvc:CartesianChart Series="{Binding WeeklyStudySeries}" Height="300">
+                            <lvc:CartesianChart.XAxes>
+                                <lvc:Axis Position="Bottom" Foreground="{DynamicResource MutedBrush}">
+                                    <lvc:Axis.Labels>
+                                        <x:Array Type="{x:Type sys:String}" xmlns:sys="clr-namespace:System;assembly=mscorlib">
+                                            <sys:String>Mon</sys:String>
+                                            <sys:String>Tue</sys:String>
+                                            <sys:String>Wed</sys:String>
+                                        <sys:String>Thu</sys:String>
+                                        <sys:String>Fri</sys:String>
+                                        <sys:String>Sat</sys:String>
+                                        <sys:String>Sun</sys:String>
+                                    </x:Array>
+                                </lvc:Axis.Labels>
+                            </lvc:Axis>
+
+                            <lvc:Axis Position="Left" Foreground="{DynamicResource MutedBrush}"/>
+                        </lvc:CartesianChart>
+
+                        <TextBlock Text="Total Hours Studied This Week"
+                                   Foreground="{DynamicResource MutedBrush}"
+                                   Margin="0,10,0,5"/>
+                        <TextBlock Text="{Binding TotalWeeklyHours,
+                                           Converter={StaticResource HoursToStringConverter},
+                                           FallbackValue='0.0h'}"
+                                   FontSize="24" FontWeight="Bold"
+                                   Foreground="{DynamicResource PrimaryBrush}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Pomodoro Timer Card -->
+                <Border Grid.Column="1"
+                        Background="{DynamicResource SurfaceBrush}"
+                        CornerRadius="12" Padding="30">
+                    <StackPanel HorizontalAlignment="Center">
+
+                        <!-- State label -->
+                        <TextBlock Text="{Binding CurrentState}"
+                                   FontSize="16" FontWeight="Bold"
+                                   Foreground="{DynamicResource PrimaryBrush}"
+                                   HorizontalAlignment="Center"
+                                   Margin="0,0,0,10"/>
+
+                        <!-- Circular Timer -->
+                        <Grid Width="250" Height="250" Margin="0,0,0,30">
+                            <Ellipse Stroke="{DynamicResource CircleTrackBrush}"
+                                     StrokeThickness="15" Fill="Transparent"/>
+                            <Ellipse Stroke="{DynamicResource CircleProgressBrush}"
+                                     StrokeThickness="15" Fill="Transparent"
+                                     StrokeDashArray="706.858"
+                                     StrokeDashOffset="{Binding TimerDashOffset}"
+                                     RenderTransformOrigin="0.5,0.5">
+                                <Ellipse.RenderTransform>
+                                    <RotateTransform Angle="-90"/>
+                                </Ellipse.RenderTransform>
+                            </Ellipse>
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <TextBlock Text="{Binding TimerDisplay}"
+                                           FontSize="56" FontWeight="Bold"
+                                           Foreground="{DynamicResource ForegroundBrush}"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="minutes remaining"
+                                           Foreground="{DynamicResource MutedBrush}"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,5,0,0"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Subject Selector -->
+                        <ComboBox ItemsSource="{Binding Subjects}"
+                                  SelectedItem="{Binding SelectedSubject}"
+                                  DisplayMemberPath="Name"
+                                  Width="200" Margin="0,0,0,20"
+                                  Style="{StaticResource ModernComboBoxStyle}">
+                            <ComboBox.ItemContainerStyle>
+                                <Style TargetType="ComboBoxItem">
+                                    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}"/>
+                                </Style>
+                            </ComboBox.ItemContainerStyle>
+                        </ComboBox>
+
+                        <!-- Start / Stop -->
+                        <Grid Width="200">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Grid.Column="0" Content="Start"
+                                    Command="{Binding StartTimerCommand}"
+                                    Background="{DynamicResource SuccessBrush}"
+                                    Style="{StaticResource ActionButtonStyle}"
+                                    Margin="0,0,5,0"/>
+                            <Button Grid.Column="1" Content="Stop"
+                                    Command="{Binding StopTimerCommand}"
+                                    Background="{DynamicResource DangerBrush}"
+                                    Style="{StaticResource ActionButtonStyle}"
+                                    Margin="5,0,0,0"/>
+                        </Grid>
+
+                        <TextBlock Text="Space to Start • Esc to Stop"
+                                   Foreground="{DynamicResource MutedBrush}"
+                                   FontSize="12" HorizontalAlignment="Center"
+                                   Margin="0,20,0,0"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Grid>
     </Grid>
 </Window>
