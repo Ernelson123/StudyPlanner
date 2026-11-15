@@ -4,6 +4,7 @@
 
 Built with **.NET 8**, **WPF**, and following **Clean Architecture** principles, it offers a sleek dark-mode interface, real-time statistics, and data export capabilities.
 
+**Still in development**
 ---
 
 ## 🚀 Features
